@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+
 import {
   getManagedFreeLiteLlmBaseUrl,
   MANAGED_FREE_PROVIDER_CONFIGS,
@@ -77,6 +79,26 @@ const pioneerHeaders = (apiKey: string) => ({
   'X-API-Key': apiKey,
   'Content-Type': 'application/json',
 });
+
+const vertexHeaders = (apiKey: string, authType?: string): Record<string, string> => {
+  if (authType === 'vertex_adc') {
+    const tokenFile = process.env.VERTEX_BEARER_TOKEN_FILE ?? '/var/run/vertex/token';
+    let token = '';
+    try {
+      token = readFileSync(tokenFile, 'utf8').trim();
+    } catch {
+      // Let the upstream auth failure surface without logging credential data.
+    }
+    return {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+  }
+  return {
+    'Content-Type': 'application/json',
+    'x-goog-api-key': apiKey,
+  };
+};
 
 const openaiPath = () => '/v1/chat/completions';
 const BEDROCK_OPENAI_MODEL_RE = /(?:^|\.)openai\./i;
@@ -446,10 +468,7 @@ export const PROVIDER_ENDPOINTS: Record<string, ProviderEndpoint> = {
   // on everyone for no gain.
   vertex: {
     baseUrl: 'https://aiplatform.googleapis.com/v1beta1',
-    buildHeaders: (apiKey: string) => ({
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    }),
+    buildHeaders: vertexHeaders,
     buildPath: (model: string) => `/publishers/google/models/${model}:generateContent`,
     // No `?alt=sse` here: provider-client appends it for every google-format
     // stream, so adding it would produce the query string twice.

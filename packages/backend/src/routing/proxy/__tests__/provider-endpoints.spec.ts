@@ -1,3 +1,5 @@
+import { unlinkSync, writeFileSync } from 'fs';
+
 import { PROVIDER_REGISTRY } from '../../../common/constants/providers';
 import {
   buildCustomEndpoint,
@@ -569,6 +571,23 @@ describe('PROVIDER_ENDPOINTS', () => {
       'Content-Type': 'application/json',
       'x-goog-api-key': 'AQ.test',
     });
+  });
+
+  it('vertex sends an ADC Bearer token from the configured token file', () => {
+    const tokenFile = '/tmp/manifest-vertex-test-token';
+    const previous = process.env.VERTEX_BEARER_TOKEN_FILE;
+    writeFileSync(tokenFile, 'ya29.test-token\n', 'utf8');
+    process.env.VERTEX_BEARER_TOKEN_FILE = tokenFile;
+    try {
+      expect(PROVIDER_ENDPOINTS['vertex'].buildHeaders('ignored', 'vertex_adc')).toEqual({
+        Authorization: 'Bearer ya29.test-token',
+        'Content-Type': 'application/json',
+      });
+    } finally {
+      if (previous === undefined) delete process.env.VERTEX_BEARER_TOKEN_FILE;
+      else process.env.VERTEX_BEARER_TOKEN_FILE = previous;
+      unlinkSync(tokenFile);
+    }
   });
 
   it('google buildHeaders sends the API key in x-goog-api-key (not query string)', () => {
