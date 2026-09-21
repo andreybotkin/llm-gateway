@@ -1,0 +1,22 @@
+# Runtime-only image for constrained k3s builders.
+# Build artifacts and production node_modules are prepared before Kaniko runs.
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:af85d11ce7ef10172855a6e3649e3e8125b1b9e3ca41849ec2918036f05cb212
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV BIND_ADDRESS=0.0.0.0
+ENV PATH=/nodejs/bin:$PATH
+
+COPY --chown=nonroot:nonroot node_modules node_modules
+COPY --chown=nonroot:nonroot packages/shared/dist packages/shared/dist
+COPY --chown=nonroot:nonroot packages/backend/dist packages/backend/dist
+COPY --chown=nonroot:nonroot packages/frontend/dist packages/frontend/dist
+COPY --chown=nonroot:nonroot package.json package.json
+COPY --chown=nonroot:nonroot packages/shared/package.json packages/shared/
+COPY --chown=nonroot:nonroot packages/backend/package.json packages/backend/
+COPY --chown=nonroot:nonroot packages/manifest/package.json packages/manifest/
+
+EXPOSE 2099
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+  CMD ["node", "-e", "const p=process.env.PORT||'3001';fetch(`http://127.0.0.1:${p}/api/v1/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+CMD ["packages/backend/dist/main.js"]
