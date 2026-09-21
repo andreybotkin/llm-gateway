@@ -25,7 +25,10 @@ COPY packages/manifest packages/manifest
 # Marks this bundle as a self-hosted build so the frontend reveals the
 # version badge baked in at build time. Cloud CI builds never set this.
 ENV VITE_MANIFEST_SELFHOSTED=true
-RUN npx turbo build --filter=manifest-backend --filter=manifest-frontend --filter=manifest-shared
+# Keep the monorepo build within the memory budget of the k3s builder.
+ENV NODE_OPTIONS=--max-old-space-size=3072
+ENV TURBO_CONCURRENCY=1
+RUN npx turbo build --concurrency=1 --filter=manifest-backend --filter=manifest-frontend --filter=manifest-shared
 
 # Stage 3: Production dependencies only. npm ci runs with --ignore-scripts
 # so nothing is compiled — all runtime deps are pure JS, making the glibc
