@@ -117,10 +117,13 @@ const ModelPickerModal: Component<Props> = (props) => {
     (props.connectedProviders ?? []).some((p) => isUsable(p) && p.auth_type === 'api_key');
   const hasLocal = () =>
     (props.connectedProviders ?? []).some((p) => isUsable(p) && p.auth_type === 'local');
+  const hasVertexAdc = () =>
+    (props.connectedProviders ?? []).some((p) => isUsable(p) && p.auth_type === 'vertex_adc');
   // Show the tab strip whenever the user has models in more than one auth
   // category — otherwise the picker is single-category and the tabs add
   // noise. Local counts as its own category alongside subscription/api_key.
-  const showTabs = () => [hasSubscription(), hasApiKey(), hasLocal()].filter(Boolean).length > 1;
+  const showTabs = () =>
+    [hasSubscription(), hasApiKey(), hasLocal(), hasVertexAdc()].filter(Boolean).length > 1;
 
   // Default to the first connected category (subscription > api_key > local)
   // so the picker opens on something the user actually has. When nothing is
@@ -129,6 +132,7 @@ const ModelPickerModal: Component<Props> = (props) => {
   // (only shown for api_key) don't start failing.
   const resolveInitialTab = (): AuthType => {
     if (hasSubscription()) return 'subscription';
+    if (hasVertexAdc()) return 'vertex_adc';
     if (hasLocal() && !hasApiKey()) return 'local';
     return 'api_key';
   };
@@ -567,6 +571,27 @@ const ModelPickerModal: Component<Props> = (props) => {
                     <path d="m13.18 6.75 2.66-4.22-1.69-1.07L12 4.87 9.85 1.46 8.16 2.53l2.66 4.22-8.67 13.72A1.006 1.006 0 0 0 3 22.01h18c.36 0 .7-.2.88-.52s.16-.71-.03-1.02zM10.24 20 12 16.98 13.76 20zm5.83 0-3.21-5.5c-.36-.62-1.37-.62-1.73 0L7.92 20H4.81L12 8.62 19.19 20h-3.11Z" />
                   </svg>
                   Local
+                </button>
+              </Show>
+              <Show when={hasVertexAdc()}>
+                <button
+                  role="tab"
+                  aria-selected={activeTab() === 'vertex_adc'}
+                  class="panel__tab"
+                  classList={{ 'panel__tab--active': activeTab() === 'vertex_adc' }}
+                  onClick={() => {
+                    setActiveTab('vertex_adc');
+                    setShowFreeOnly(false);
+                  }}
+                >
+                  <span
+                    class="provider-modal__tab-icon"
+                    aria-hidden="true"
+                    style="color: #4285f4; font-weight: 700;"
+                  >
+                    GV
+                  </span>
+                  Vertex ADC
                 </button>
               </Show>
             </div>

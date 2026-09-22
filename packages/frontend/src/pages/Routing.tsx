@@ -450,7 +450,7 @@ const Routing: Component = () => {
     category: string,
     model: string,
     provider: string,
-    authType?: 'api_key' | 'subscription' | 'local',
+    authType?: AuthType,
     providerKeyLabel?: string,
   ) => {
     setChangingSpecificity(category);
@@ -473,7 +473,7 @@ const Routing: Component = () => {
     category: string,
     provider: string,
     providerKeyLabel: string | null,
-    authType?: 'api_key' | 'subscription' | 'local',
+    authType?: AuthType,
   ) => {
     const assignment = specificityAssignments()?.find((a) => a.category === category);
     const effective = assignment?.override_route ?? null;
