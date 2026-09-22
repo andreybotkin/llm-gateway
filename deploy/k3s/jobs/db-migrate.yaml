@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: manifest-db-migrate-
+  labels:
+    app.kubernetes.io/name: manifest-db-migrate
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: manifest-db-migrate
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/andreybotkin/llm-gateway
+          imagePullPolicy: Always
+          command: [node, packages/backend/dist/database/migrate.js]
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-db-credentials
+                  key: DATABASE_URL
+            - name: MIGRATION_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-db-credentials
+                  key: DATABASE_URL
+            - name: BETTER_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-runtime
+                  key: BETTER_AUTH_SECRET
+            - name: MANIFEST_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-runtime
+                  key: MANIFEST_ENCRYPTION_KEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}

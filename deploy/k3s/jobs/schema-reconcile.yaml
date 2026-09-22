@@ -1,0 +1,75 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: manifest-schema-reconcile-
+  labels:
+    app.kubernetes.io/name: manifest-schema-reconcile
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: manifest-schema-reconcile
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: reconcile
+          image: ghcr.io/andreybotkin/llm-gateway
+          imagePullPolicy: Always
+          command: [node, -e]
+          args:
+            - |
+              const dsmod = require('./packages/backend/dist/database/datasource');
+              const ds = dsmod.default || dsmod;
+              const { AddAutofixWaitlist1796000000000 } = require('./packages/backend/dist/database/migrations/1796000000000-AddAutofixWaitlist');
+              const { AddAutofixAccessGrant1799000400000 } = require('./packages/backend/dist/database/migrations/1799000400000-AddAutofixAccessGrant');
+              (async () => {
+                await ds.initialize();
+                const qr = ds.createQueryRunner();
+                await qr.connect();
+                await qr.startTransaction();
+                try {
+                  const waitlist = await qr.hasColumn('tenants', 'autofix_waitlist_at');
+                  const grant = await qr.hasColumn('tenants', 'autofix_access_granted_at');
+                  if (!waitlist) await new AddAutofixWaitlist1796000000000().up(qr);
+                  if (!grant) await new AddAutofixAccessGrant1799000400000().up(qr);
+                  await qr.commitTransaction();
+                } catch (e) {
+                  await qr.rollbackTransaction();
+                  throw e;
+                } finally {
+                  await qr.release();
+                  await ds.destroy();
+                }
+              })().catch((e) => { console.error(e); process.exit(1); });
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-db-credentials
+                  key: DATABASE_URL
+            - name: MIGRATION_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-db-credentials
+                  key: DATABASE_URL
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}

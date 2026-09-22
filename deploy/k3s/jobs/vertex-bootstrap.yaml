@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: manifest-vertex-bootstrap-
+  labels:
+    app.kubernetes.io/name: manifest-vertex-bootstrap
+    app.kubernetes.io/component: bootstrap
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: manifest-vertex-bootstrap
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vertex-bootstrap
+          image: ghcr.io/andreybotkin/llm-gateway
+          imagePullPolicy: Always
+          command: [node, /bootstrap/vertex-bootstrap.js]
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: VERTEX_DEPLOYMENT
+              value: alm-erp/global
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-db-credentials
+                  key: DATABASE_URL
+            - name: MANIFEST_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-runtime
+                  key: MANIFEST_ENCRYPTION_KEY
+          volumeMounts:
+            - name: bootstrap
+              mountPath: /bootstrap
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+      volumes:
+        - name: bootstrap
+          configMap:
+            name: manifest-vertex-bootstrap
+            defaultMode: 0555

@@ -1,0 +1,182 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manifest
+  labels:
+    app.kubernetes.io/name: manifest
+    app.kubernetes.io/part-of: platform
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: manifest
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: manifest
+        app.kubernetes.io/part-of: platform
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      automountServiceAccountToken: false
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: tip.io/role
+                    operator: In
+                    values: [core]
+      securityContext:
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manifest
+          image: ghcr.io/andreybotkin/llm-gateway
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 2099
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "2099"
+            - name: NODE_ENV
+              value: production
+            - name: SEED_DATA
+              value: "false"
+            - name: MANIFEST_MODE
+              value: selfhosted
+            - name: BETTER_AUTH_URL
+              value: https://manifest.swopn.com
+            - name: RUN_MIGRATIONS_ON_BOOT
+              value: "true"
+            - name: REQUEST_RECORDING_STORAGE
+              value: s3
+            - name: REQUEST_RECORDING_S3_ENDPOINT
+              value: http://garage.platform.svc.cluster.local:3900
+            - name: REQUEST_RECORDING_S3_REGION
+              value: garage
+            - name: REQUEST_RECORDING_S3_BUCKET
+              value: manifest-recordings
+            - name: REQUEST_RECORDING_S3_FORCE_PATH_STYLE
+              value: "true"
+            - name: REQUEST_RECORDING_RETENTION_DAYS
+              value: "365"
+            - name: DB_POOL_MAX
+              value: "10"
+            - name: AUTH_DB_POOL_MAX
+              value: "5"
+            - name: MANIFEST_TELEMETRY_DISABLED
+              value: "1"
+            - name: VERTEX_BEARER_TOKEN_FILE
+              value: /var/run/vertex/token
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-db-credentials
+                  key: DATABASE_URL
+            - name: BETTER_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-runtime
+                  key: BETTER_AUTH_SECRET
+            - name: MANIFEST_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-runtime
+                  key: MANIFEST_ENCRYPTION_KEY
+            - name: REQUEST_RECORDING_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-recording-credentials
+                  key: access-key-id
+            - name: REQUEST_RECORDING_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-recording-credentials
+                  key: secret-access-key
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: vertex-token
+              mountPath: /var/run/vertex
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 90
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+        - name: vertex-token-refresh
+          image: ghcr.io/andreybotkin/llm-gateway/vertex-token-refresh
+          imagePullPolicy: Always
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/vertex/credentials/vertex-sa.json
+            - name: VERTEX_TOKEN_FILE
+              value: /var/run/vertex/token
+          volumeMounts:
+            - name: vertex-token
+              mountPath: /var/run/vertex
+            - name: vertex-credentials
+              mountPath: /var/run/vertex/credentials
+              readOnly: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: vertex-token
+          emptyDir:
+            medium: Memory
+        - name: vertex-credentials
+          secret:
+            secretName: manifest-vertex-credentials
+            defaultMode: 0440

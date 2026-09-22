@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: manifest
+  labels:
+    app.kubernetes.io/name: manifest
+    app.kubernetes.io/part-of: platform
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: platform-manifest-ip-allowlist@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: manifest.swopn.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: manifest
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - manifest.swopn.com
+      secretName: manifest-swopn-tls
