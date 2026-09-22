@@ -7,6 +7,7 @@ import {
   SHARED_PROVIDERS,
   SUPPORTED_SUBSCRIPTION_PROVIDER_IDS,
   normalizeProviderName,
+  type AuthType,
   type ModelRoute,
 } from 'manifest-shared';
 import { AgentEnabledProvider } from '../../entities/agent-enabled-provider.entity';
@@ -19,7 +20,7 @@ import { McpOperator, MCP_WRITE_SCOPE } from '../mcp-auth';
 import { McpToolDeps } from '../tool-deps';
 import { ok, result } from '../tool-result';
 
-const AUTH_TYPES = ['api_key', 'subscription', 'local'] as const;
+const AUTH_TYPES = ['api_key', 'subscription', 'local', 'vertex_adc'] as const;
 
 /**
  * Provider connection tools. Providers are tenant-global; an agent only decides
@@ -347,7 +348,7 @@ async function setAgentProviderEnabled(
   operator: McpOperator,
   agentName: string,
   provider: string,
-  authType: ('api_key' | 'subscription' | 'local') | undefined,
+  authType: AuthType | undefined,
   label: string | undefined,
   enabled: boolean,
 ): Promise<unknown> {

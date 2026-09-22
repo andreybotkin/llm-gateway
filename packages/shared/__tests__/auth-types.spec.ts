@@ -2,11 +2,15 @@ import { AUTH_TYPES, AuthType } from '../src/auth-types';
 
 describe('AUTH_TYPES', () => {
   it('contains api_key, subscription, and local', () => {
-    expect(AUTH_TYPES).toEqual(['api_key', 'subscription', 'local']);
+    expect(AUTH_TYPES).toEqual(['api_key', 'subscription', 'local', 'vertex_adc']);
   });
 
-  it('has exactly three entries', () => {
-    expect(AUTH_TYPES).toHaveLength(3);
+  it('contains the ADC Vertex auth type', () => {
+    expect(AUTH_TYPES).toContain('vertex_adc');
+  });
+
+  it('has exactly four entries', () => {
+    expect(AUTH_TYPES).toHaveLength(4);
   });
 });
 

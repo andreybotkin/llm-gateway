@@ -381,7 +381,11 @@ const ProviderConnectionsPage: Component<ProviderConnectionsPageProps> = (props)
   );
 
   const connectedSummaries = () =>
-    (data()?.providers ?? []).filter((provider) => provider.auth_type === copy().authType);
+    (data()?.providers ?? []).filter(
+      (provider) =>
+        provider.auth_type === copy().authType ||
+        (props.kind === 'byok' && provider.auth_type === 'vertex_adc'),
+    );
 
   const hasUsage = (summary: TenantProviderSummary) =>
     summary.consumption_tokens > 0 || summary.consumption_messages > 0;

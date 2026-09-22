@@ -6,7 +6,7 @@ import { McpOperator, MCP_WRITE_SCOPE } from '../mcp-auth';
 import { McpToolDeps } from '../tool-deps';
 import { result } from '../tool-result';
 
-const AUTH_TYPES = ['api_key', 'subscription', 'local'] as const;
+const AUTH_TYPES = ['api_key', 'subscription', 'local', 'vertex_adc'] as const;
 const ROUTE_TEST_TIMEOUT_MS = 120_000;
 
 /** --models states the whole chain: extra entries set fallbacks, a lone entry clears them. */
