@@ -38,9 +38,9 @@ async function main() {
           (id, created_by_user_id, provider, api_key_encrypted, is_active,
            connected_at, updated_at, agent_id, key_prefix, auth_type,
            cached_models, models_fetched_at, region, label, priority,
-           custom_provider_id, tenant_id)
+           tenant_id)
          values ($1, null, 'vertex', $2, true, now(), now(), null, 'vertex',
-                 'vertex_adc', '[]', null, $3, 'default', 0, null, $4)`,
+                 'vertex_adc', '[]', null, $3, 'default', 0, $4)`,
         [providerId, encrypt('vertex_adc', getEncryptionSecret()), deployment, tenantId],
       );
     }
