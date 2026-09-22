@@ -1,5 +1,13 @@
 # manifest
 
+## 6.25.5
+
+### Patch Changes
+
+- f87fba4: Fix remote MCP connections stalling in Claude Code. `subscriptions/listen` is served over SSE whatever the response mode says, and buffering that body held back the acknowledgement the client waits for, so every listen attempt hung until the client timed out and the connection handshake stalled behind it. Stream those responses instead, and stop advertising `tools.listChanged`, which a per-request server can never send.
+- c99e02e: Index Autofix Provider Attempts so filtered Requests loads avoid reading unrelated attempts.
+- 0e84ab5: Index recorded provider attempts so the nightly request-recording retention job reads a short index range instead of scanning the whole attempts table.
+
 ## 6.25.4
 
 ### Patch Changes
