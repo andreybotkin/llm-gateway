@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgentMessage } from '../../entities/agent-message.entity';
 import { CustomProvider } from '../../entities/custom-provider.entity';
+import { TenantProvider } from '../../entities/tenant-provider.entity';
 import { ReasoningContentCacheEntry } from '../../entities/reasoning-content-cache-entry.entity';
 import { RoutingCoreModule } from '../routing-core/routing-core.module';
 import { ModelPricesModule } from '../../model-prices/model-prices.module';
@@ -32,7 +33,12 @@ import { AttemptRecordingService } from './attempt-recording.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AgentMessage, CustomProvider, ReasoningContentCacheEntry]),
+    TypeOrmModule.forFeature([
+      AgentMessage,
+      CustomProvider,
+      TenantProvider,
+      ReasoningContentCacheEntry,
+    ]),
     RoutingCoreModule,
     ModelPricesModule,
     ModelDiscoveryModule,

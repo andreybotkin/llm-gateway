@@ -12,12 +12,17 @@ import {
   HttpStatus,
   Optional,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Request, Response as ExpressResponse } from 'express';
+import { readFileSync } from 'fs';
+import { Repository } from 'typeorm';
 import { SkipThrottle } from '@nestjs/throttler';
 import { v4 as uuid } from 'uuid';
 import { Public } from '../../common/decorators/public.decorator';
 import { AgentKeyAuthGuard } from '../../otlp/guards/agent-key-auth.guard';
 import { IngestionContext } from '../../otlp/interfaces/ingestion-context.interface';
+import { TenantProvider } from '../../entities/tenant-provider.entity';
+import { parseVertexDeployment, getVertexBaseUrl } from '../vertex-deployment';
 import { ProxyService, type RoutingMeta } from './proxy.service';
 import { ProxyRateLimiter } from './proxy-rate-limiter';
 import { ProviderClient } from './provider-client';
@@ -141,6 +146,8 @@ export class ProxyController {
     private readonly observationReporter: ObservationReporter,
     private readonly providerParamSpecs: ProviderParamSpecService,
     private readonly modelsDevSync: ModelsDevSyncService,
+    @InjectRepository(TenantProvider)
+    private readonly tenantProviderRepo: Repository<TenantProvider>,
     @Optional()
     private readonly recordingConfig?: AgentRecordingConfigService,
     @Optional()
@@ -211,6 +218,132 @@ export class ProxyController {
       object: 'list',
       data,
     };
+  }
+
+  @Post('embeddings')
+  async embeddings(
+    @Req() req: Request & { ingestionContext: IngestionContext },
+    @Res() res: ExpressResponse,
+  ): Promise<void> {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const requestedModel =
+      typeof body.model === 'string' ? body.model : 'vertex/gemini-embedding-001';
+    const model = requestedModel.replace(/^vertex\//, '');
+    const input = body.input;
+    const inputs =
+      typeof input === 'string'
+        ? [input]
+        : Array.isArray(input) && input.every((item) => typeof item === 'string')
+          ? input
+          : null;
+
+    if (!inputs || inputs.length === 0 || inputs.some((item) => item.length === 0)) {
+      res.status(HttpStatus.BAD_REQUEST).json({
+        error: {
+          message: 'input must be a non-empty string or an array of strings',
+          type: 'invalid_request_error',
+        },
+      });
+      return;
+    }
+    if (!/(?:embed|embedding)/i.test(model)) {
+      res.status(HttpStatus.BAD_REQUEST).json({
+        error: {
+          message: 'Vertex embedding mode requires an embedding model',
+          type: 'invalid_request_error',
+        },
+      });
+      return;
+    }
+
+    const { tenantId } = req.ingestionContext;
+    const provider = await this.tenantProviderRepo.findOne({
+      where: { tenant_id: tenantId, provider: 'vertex', auth_type: 'vertex_adc', is_active: true },
+    });
+    const deployment = parseVertexDeployment(provider?.region);
+    if (!provider || !deployment) {
+      res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        error: { message: 'No active Vertex ADC deployment is configured', type: 'provider_error' },
+      });
+      return;
+    }
+
+    let token: string;
+    try {
+      token = readFileSync(
+        process.env.VERTEX_BEARER_TOKEN_FILE ?? '/var/run/vertex/token',
+        'utf8',
+      ).trim();
+    } catch {
+      token = '';
+    }
+    if (!token) {
+      res.status(HttpStatus.BAD_GATEWAY).json({
+        error: { message: 'Vertex ADC token is unavailable', type: 'provider_error' },
+      });
+      return;
+    }
+
+    const parameters: Record<string, unknown> = {};
+    if (
+      typeof body.dimensions === 'number' &&
+      Number.isInteger(body.dimensions) &&
+      body.dimensions > 0
+    ) {
+      parameters.outputDimensionality = body.dimensions;
+    }
+    if (typeof body.task_type === 'string' && body.task_type.length > 0) {
+      parameters.taskType = body.task_type;
+    }
+    const instances = inputs.map((content) => ({ content }));
+    const url = `${getVertexBaseUrl(deployment)}/publishers/google/models/${encodeURIComponent(model)}:predict`;
+
+    let upstream: Response;
+    try {
+      upstream = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instances,
+          ...(Object.keys(parameters).length > 0 ? { parameters } : {}),
+        }),
+      });
+    } catch {
+      res.status(HttpStatus.BAD_GATEWAY).json({
+        error: { message: 'Vertex embedding request failed', type: 'provider_error' },
+      });
+      return;
+    }
+
+    const responseBody = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) {
+      res.status(upstream.status).json({
+        error: {
+          message: 'Vertex embedding request failed',
+          type: 'provider_error',
+          details: responseBody,
+        },
+      });
+      return;
+    }
+
+    const predictions = Array.isArray(responseBody?.predictions) ? responseBody.predictions : [];
+    const data = predictions.map((prediction: any, index: number) => ({
+      object: 'embedding',
+      embedding: prediction?.embeddings?.values ?? prediction?.embeddings?.statistics?.values ?? [],
+      index,
+    }));
+    const tokenCount = predictions.reduce(
+      (sum: number, prediction: any) =>
+        sum + Number(prediction?.embeddings?.statistics?.token_count ?? 0),
+      0,
+    );
+    res.status(HttpStatus.OK).json({
+      object: 'list',
+      data,
+      model: requestedModel,
+      usage: { prompt_tokens: tokenCount, total_tokens: tokenCount },
+    });
   }
 
   @Post('chat/completions')
