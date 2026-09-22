@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { readFileSync } from 'fs';
 import { DiscoveredModel, FetcherConfig, DEFAULT_CONTEXT_WINDOW } from './model-fetcher';
 import {
   getManagedFreeLiteLlmModelsUrl,
@@ -427,7 +428,7 @@ export const PROVIDER_NON_CHAT: Record<string, RegExp> = {
   // Vertex serves the same non-chat families as the Gemini API, plus Imagen
   // and Veo under their own names.
   vertex:
-    /(?:^aqs-|nano-banana|^deep-research|computer-use|^lyria|^imagen|^veo|robotics|flash-lite-preview-\d{2}-\d{4}$)/i,
+    /(?:^aqs-|nano-banana|^deep-research|computer-use|^lyria|^imagen|^veo|embedding|tts|transcribe|live-|image|robotics|flash-lite-preview-\d{2}-\d{4}$)/i,
   ...Object.fromEntries(
     MANAGED_FREE_PROVIDER_CONFIGS.map((config) => [config.id, config.nonChatModelPattern]),
   ),
@@ -551,7 +552,37 @@ interface GeminiModelEntry {
   inputTokenLimit?: number;
 }
 
-const GEMINI_VERSION_SUFFIX_RE = /-\d{3}$/;
+interface VertexPublisherModelEntry {
+  name: string;
+  displayName?: string;
+  inputTokenLimit?: number;
+}
+
+function parseVertexPublisherModels(body: unknown, provider: string): DiscoveredModel[] {
+  const models = (body as { publisherModels?: unknown[] })?.publisherModels;
+  if (!Array.isArray(models)) return [];
+  return models
+    .filter((value): value is VertexPublisherModelEntry => {
+      const entry = value as VertexPublisherModelEntry;
+      return typeof entry.name === 'string' && entry.name.length > 0;
+    })
+    .map((entry) => {
+      const id = entry.name.replace(/^publishers\/google\/models\//, '');
+      return {
+        id,
+        displayName: entry.displayName || id,
+        provider,
+        contextWindow: entry.inputTokenLimit ?? GEMINI_DEFAULT_CONTEXT,
+        inputPricePerToken: null,
+        outputPricePerToken: null,
+        capabilityReasoning: false,
+        capabilityCode: false,
+        qualityScore: 3,
+      };
+    });
+}
+
+const GEMINI_VERSION_SUFFIX_RE = /-\\d{3}$/;
 
 function parseGemini(body: unknown, provider: string): DiscoveredModel[] {
   const models = (body as { models?: unknown[] })?.models;
@@ -1107,6 +1138,9 @@ export class ProviderModelFetcherService {
     options?: ProviderModelFetchOptions,
   ): Promise<DiscoveredModel[]> {
     let configKey = providerId.toLowerCase();
+    if (configKey === 'vertex' && authType === 'vertex_adc') {
+      return this.fetchVertexPublisherModels();
+    }
     // OpenAI subscription tokens use a different models endpoint
     if (configKey === 'openai' && authType === 'subscription') {
       configKey = 'openai-subscription';
@@ -1211,6 +1245,38 @@ export class ProviderModelFetcherService {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Failed to fetch models from ${providerId}: ${message}`);
+      return [];
+    }
+  }
+
+  private async fetchVertexPublisherModels(): Promise<DiscoveredModel[]> {
+    const tokenFile = process.env.VERTEX_BEARER_TOKEN_FILE ?? '/var/run/vertex/token';
+    let token: string;
+    try {
+      token = readFileSync(tokenFile, 'utf8').trim();
+    } catch {
+      this.logger.warn('Vertex ADC token file is unavailable for model discovery');
+      return [];
+    }
+    if (!token) return [];
+
+    const url = 'https://aiplatform.googleapis.com/v1beta1/publishers/google/models?pageSize=100';
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        this.logger.warn(`Vertex publisher model discovery returned ${res.status}`);
+        return [];
+      }
+      return filterNonChatModels(parseVertexPublisherModels(await res.json(), 'vertex'), 'vertex');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Failed to fetch Vertex publisher models: ${message}`);
       return [];
     }
   }
