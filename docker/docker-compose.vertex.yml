@@ -1,0 +1,41 @@
+services:
+  manifest:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: manifest:vertex-compose
+    network_mode: host
+    ports: !reset []
+    environment:
+      BETTER_AUTH_URL: https://vertex.swopn.com
+      BETTER_AUTH_ALLOWED_HOSTS: vertex.swopn.com
+      DATABASE_URL: postgresql://manifest:${POSTGRES_PASSWORD}@127.0.0.1:15432/manifest
+      MANIFEST_TELEMETRY_DISABLED: "1"
+      VERTEX_BEARER_TOKEN_FILE: /var/run/vertex/token
+    volumes:
+      - recordings:/data/request-recordings
+      - vertex-token:/var/run/vertex:ro
+    networks: !reset []
+
+  vertex-token-refresh:
+    build:
+      context: ./vertex-token-refresh
+    image: manifest-vertex-token-refresh:local
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/vertex-sa.json
+    volumes:
+      - ./secrets/vertex-sa.json:/run/secrets/vertex-sa.json:ro
+      - vertex-token:/var/run/vertex
+    networks: !reset []
+
+  postgres:
+    network_mode: host
+    command: ["postgres", "-p", "15432", "-h", "127.0.0.1"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 15432 -U manifest"]
+    networks: !reset []
+
+volumes:
+  vertex-token:
