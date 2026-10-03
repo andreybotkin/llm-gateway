@@ -27,6 +27,10 @@ vi.mock("@solidjs/router", () => ({
   useLocation: () => ({ get pathname() { return mockPathname; } }),
 }));
 
+vi.mock("../../src/services/dither-ground.js", () => ({
+  mountDither: () => () => {},
+}));
+
 const mockGetBillingStatus = vi.fn();
 vi.mock("../../src/services/api/billing.js", () => ({
   getBillingStatus: (...args: unknown[]) => mockGetBillingStatus(...args),
@@ -413,17 +417,17 @@ describe("Sidebar — usage card", () => {
   });
 });
 
-describe("Sidebar — Autofix announcement card", () => {
-  it("always renders the Autofix announcement card", async () => {
+describe("Sidebar — API Bot announcement card", () => {
+  it("renders the API Bot card in self-hosted", async () => {
     const { container } = render(() => <Sidebar />);
-    await screen.findByText("Make sure your APIs no longer crash");
-    expect(container.querySelector(".sidebar-autofix")).not.toBeNull();
+    await screen.findByText("Meet API Bot");
+    expect(container.querySelector(".sidebar-api-bot")).not.toBeNull();
   });
 
-  it("renders the Autofix announcement card in cloud too", async () => {
+  it("renders the API Bot card in cloud too", async () => {
     mockIsSelfHosted = false;
     const { container } = render(() => <Sidebar />);
-    await screen.findByText("Make sure your APIs no longer crash");
-    expect(container.querySelector(".sidebar-autofix")).not.toBeNull();
+    await screen.findByText("Meet API Bot");
+    expect(container.querySelector(".sidebar-api-bot")).not.toBeNull();
   });
 });
