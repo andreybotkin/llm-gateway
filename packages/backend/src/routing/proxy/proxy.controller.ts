@@ -18,6 +18,7 @@ import { readFileSync } from 'fs';
 import { Repository } from 'typeorm';
 import { SkipThrottle } from '@nestjs/throttler';
 import { v4 as uuid } from 'uuid';
+import { currentMinimaxModelChoices } from 'manifest-shared';
 import { Public } from '../../common/decorators/public.decorator';
 import { AgentKeyAuthGuard } from '../../otlp/guards/agent-key-auth.guard';
 import { IngestionContext } from '../../otlp/interfaces/ingestion-context.interface';
@@ -164,9 +165,11 @@ export class ProxyController {
     const includeCapabilities = capabilities === 'true';
     const includeCost = cost === 'true';
     const includeRouteMetadata = routeMetadata === 'true';
-    const models = await this.modelDiscovery.getModelsForAgent(
-      req.ingestionContext.tenantId,
-      req.ingestionContext.agentId,
+    const models = currentMinimaxModelChoices(
+      await this.modelDiscovery.getModelsForAgent(
+        req.ingestionContext.tenantId,
+        req.ingestionContext.agentId,
+      ),
     );
     // The synthetic `auto` route never carries metadata — it resolves to a
     // different concrete model per request, so any claim would be wrong.

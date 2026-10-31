@@ -39,6 +39,7 @@ vi.mock('../../src/services/toast-store.js', () => ({
 }));
 
 import Upgrade from '../../src/pages/Upgrade';
+import { FREE_PLAN_ENDS_NOTE } from '../../src/components/PlanPicker';
 
 const disabledStatus = {
   enabled: false,
@@ -156,6 +157,7 @@ describe('Upgrade', () => {
     render(() => <Upgrade />);
 
     const button = await screen.findByText('Use Manifest for free');
+    expect(screen.getByText(FREE_PLAN_ENDS_NOTE)).toBeDefined();
     fireEvent.click(button);
 
     expect(mockNavigate).toHaveBeenCalledWith('/');
