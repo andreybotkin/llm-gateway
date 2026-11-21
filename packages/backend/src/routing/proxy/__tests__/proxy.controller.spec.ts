@@ -232,6 +232,10 @@ describe('ProxyController', () => {
       observationReporter as never,
       providerParamSpecs as never,
       modelsDevSync as never,
+      {
+        findOne: jest.fn().mockResolvedValue(null),
+        find: jest.fn().mockResolvedValue([]),
+      } as never,
       recordingConfig as never,
       attemptRecording as never,
     );

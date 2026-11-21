@@ -1,5 +1,5 @@
 import { type Component } from 'solid-js';
-import { type CustomProviderData, type RoutingProvider } from '../services/api.js';
+import { type AuthType, type CustomProviderData, type RoutingProvider } from '../services/api.js';
 import type { CustomProviderPrefill, ProviderDeepLink } from '../services/routing-params.js';
 import ProviderSelectContent from './ProviderSelectContent.js';
 
@@ -9,7 +9,7 @@ interface Props {
   customProviders?: CustomProviderData[];
   customProviderPrefill?: CustomProviderPrefill | null;
   providerDeepLink?: ProviderDeepLink | null;
-  initialTab?: 'subscription' | 'api_key' | 'local';
+  initialTab?: AuthType;
   onClose: () => void;
   onUpdate: () => void | Promise<void>;
   onPollProviders?: () => void | Promise<void>;
