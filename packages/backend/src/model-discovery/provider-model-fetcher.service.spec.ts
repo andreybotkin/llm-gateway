@@ -274,6 +274,8 @@ describe('ProviderModelFetcherService', () => {
           inferenceProfileSummaries: [
             { inferenceProfileId: 'global.moonshotai.kimi-k3', status: 'ACTIVE' },
             { inferenceProfileId: 'global.openai.gpt-6-luna', status: 'ACTIVE' },
+            { inferenceProfileId: 'global.openai.gpt-6.1-sol', status: 'ACTIVE' },
+            { inferenceProfileId: 'eu.openai.gpt-6.1-sol', status: 'ACTIVE' },
             { inferenceProfileId: 'global.openai.gpt-6-astra', status: 'INACTIVE' },
             { inferenceProfileId: 'global.anthropic.claude-sonnet-4-6', status: 'ACTIVE' },
           ],
@@ -295,6 +297,7 @@ describe('ProviderModelFetcherService', () => {
         'openai.gpt-6-sol',
         'global.moonshotai.kimi-k3',
         'global.openai.gpt-6-luna',
+        'global.openai.gpt-6.1-sol',
       ]);
       expect(result[1]).toMatchObject({
         provider: 'bedrock',
@@ -302,6 +305,30 @@ describe('ProviderModelFetcherService', () => {
       });
       expect(result[0].supportedEndpoints).toBeUndefined();
     });
+
+    it.each(['gpt-6.1-terra', 'gpt-6.2-sol', 'gpt-6.2-astra'])(
+      'adds only the US and Global Runtime profiles for %s alongside its Mantle model',
+      async (model) => {
+        const baseId = `openai.${model}`;
+        routeFetches(
+          mantleResponse([baseId]),
+          profilesResponse({
+            inferenceProfileSummaries: ['us', 'global', 'eu', 'apac'].map((scope) => ({
+              inferenceProfileId: `${scope}.${baseId}`,
+              status: 'ACTIVE',
+            })),
+          }),
+        );
+
+        const result = await service.fetch('bedrock', 'ABSK-test', 'api_key');
+
+        expect(result.map(({ id, supportedEndpoints }) => [id, supportedEndpoints])).toEqual([
+          [baseId, undefined],
+          [`us.${baseId}`, ['/v1/chat/completions', '/v1/responses']],
+          [`global.${baseId}`, ['/v1/chat/completions', '/v1/responses']],
+        ]);
+      },
+    );
 
     it('uses the default region and warns when the profile list is truncated', async () => {
       const warn = warnSpy();
